@@ -28,7 +28,7 @@ def val_epoch(epoch, data_loader, model, criterion, opt, logger):
             targets = Variable(targets)
         outputs = model(inputs)
         loss = criterion(outputs, targets)
-        prec1, prec5 = calculate_accuracy(outputs.data, targets.data, topk=(1,5))
+        prec1, prec5 = calculate_accuracy(outputs.data, targets.data, topk=(1,1))
         top1.update(prec1, inputs.size(0))
         top5.update(prec5, inputs.size(0))
 

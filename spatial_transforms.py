@@ -449,6 +449,21 @@ class RandomRotate(object):
 
     def randomize_parameters(self):
         self.rotate_angle = random.randint(-10, 10)
+        
+class FixResize(object):
+
+    def __init__(self, size):
+        self.size = size
+        self.interpolation = Image.BILINEAR
+
+    def __call__(self, img):
+        im_size = img.size
+        ret_img = img.resize((int(self.size *self.scale), int(self.size*self.scale)))
+        return ret_img
+    
+    def randomize_parameters(self):
+        self.scale = 1
+        
 
 
 class RandomResize(object):

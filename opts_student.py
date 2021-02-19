@@ -1,9 +1,12 @@
+
 import argparse
 
 
-def parse_opts():
+def parse_opts_student():
     parser = argparse.ArgumentParser()
     parser.add_argument('--root_path', default='', type=str, help='Root directory path of data')
+    parser.add_argument('--npy_path', default='', type=str, help='Root directory
+            path of npy data')
     parser.add_argument('--video_path', default='/vinbrain/hoang/Action_Recognition/Data/RWF_frames/', type=str, help='Directory path of Videos')
     parser.add_argument('--annotation_path', default='annotation_RWF/rwf_2000.json', type=str, help='Annotation file path')
     parser.add_argument('--result_path', default='results', type=str, help='Result directory path')
@@ -67,6 +70,8 @@ def parse_opts():
     parser.add_argument('--groups', default=3, type=int, help='The number of groups at group convolutions at conv layers')
     parser.add_argument('--width_mult', default=1.0, type=float, help='The applied width multiplier to scale number of filters')
     parser.add_argument('--manual_seed', default=1, type=int, help='Manually set random seed')
+    parser.add_argument('--temperature', default=1, type=int, help='Manually set random seed')
+    parser.add_argument('--alpha', default=0.05, type=int, help='Manually set random seed')
 
     args = parser.parse_args()
 

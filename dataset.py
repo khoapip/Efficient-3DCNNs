@@ -1,6 +1,7 @@
 from datasets.kinetics import Kinetics
 from datasets.ucf101 import UCF101
 from datasets.jester import Jester
+from datasets.optical import Optical
 
 def get_training_set(opt, spatial_transform, temporal_transform,
                      target_transform):
@@ -26,6 +27,15 @@ def get_training_set(opt, spatial_transform, temporal_transform,
             sample_duration=opt.sample_duration)
     elif opt.dataset == 'ucf101':
         training_data = UCF101(
+            opt.video_path,
+            opt.annotation_path,
+            'training',
+            spatial_transform=spatial_transform,
+            temporal_transform=temporal_transform,
+            target_transform=target_transform,
+            sample_duration=opt.sample_duration)
+    elif opt.dataset == 'npy':
+        training_data = Optical(
             opt.video_path,
             opt.annotation_path,
             'training',
@@ -70,6 +80,18 @@ def get_validation_set(opt, spatial_transform, temporal_transform,
             temporal_transform,
             target_transform,
             sample_duration=opt.sample_duration)
+    elif opt.dataset == "npy":
+        validation_data = Optical(
+            opt.video_path,
+            opt.annotation_path,
+            'validation',
+            opt.n_val_samples,
+            spatial_transform,
+            temporal_transform,
+            target_transform,
+            sample_duration=opt.sample_duration)
+
+        
     return validation_data
 
 

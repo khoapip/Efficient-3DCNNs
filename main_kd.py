@@ -1,3 +1,4 @@
+
 import os
 import sys
 import json
@@ -6,9 +7,10 @@ import torch
 from torch import nn
 from torch import optim
 from torch.optim import lr_scheduler
-
 from opts import parse_opts
+from opts_student import parse_opts_student
 from model import generate_model
+from kd import train_kd
 from mean import get_mean, get_std
 from spatial_transforms import *
 from temporal_transforms import *
@@ -20,9 +22,7 @@ from train import train_epoch
 from validation import val_epoch
 import test
 
-
-
-if __name__ == '__main__':
+def arg(parse_opts):
     opt = parse_opts()
     if opt.root_path != '':
         opt.video_path = os.path.join(opt.root_path, opt.video_path)
@@ -42,14 +42,22 @@ if __name__ == '__main__':
     opt.std = get_std(opt.norm_value)
     opt.store_name = '_'.join([opt.dataset, opt.model, str(opt.width_mult) + 'x',
                                opt.modality, str(opt.sample_duration)])
+    
+    return opt
+
+
+if __name__ == '__main__':
+    opt = arg(parse_opts)
+    opt_student = arg(parse_opts_student)
     print(opt)
     with open(os.path.join(opt.result_path, 'opts.json'), 'w') as opt_file:
         json.dump(vars(opt), opt_file)
 
     torch.manual_seed(opt.manual_seed)
 
-    model, parameters = generate_model(opt)
-    print(model)
+    teacher, parameters = generate_model(opt)
+    student, parameters = generate_model(opt_student)
+    print(teacher)
 
     criterion = nn.CrossEntropyLoss()
     if not opt.no_cuda:
@@ -72,17 +80,8 @@ if __name__ == '__main__':
             crop_method = MultiScaleCornerCrop(
                 opt.scales, opt.sample_size, crop_positions=['c'])
         
-        
         spatial_transform = Compose([
             RandomHorizontalFlip(),
-            #RandomRotate(),
-            #RandomResize(),
-            #crop_method,
-            #MultiplyValues(),
-            #Dropout(),
-            #SaltImage(),
-            #Gaussian_blur(),
-            #SpatialElasticDisplacement(),
             FixResize(opt.sample_size),
             ToTensor(opt.norm_value), norm_method
         ])
@@ -116,20 +115,20 @@ if __name__ == '__main__':
             nesterov=opt.nesterov)
         scheduler = lr_scheduler.ReduceLROnPlateau(
             optimizer, 'min', patience=opt.lr_patience)
+
     if not opt.no_val:
         spatial_transform = Compose([
             Scale(opt.sample_size),
             CenterCrop(opt.sample_size),
             ToTensor(opt.norm_value), norm_method
         ])
-        #temporal_transform = LoopPadding(opt.sample_duration)
         temporal_transform = TemporalRandomCrop(opt.sample_duration, opt.downsample)
         target_transform = ClassLabel()
         validation_data = get_validation_set(
             opt, spatial_transform, temporal_transform, target_transform)
         val_loader = torch.utils.data.DataLoader(
             validation_data,
-            batch_size=16,
+            batch_size=8,
             shuffle=False,
             num_workers=opt.n_threads,
             pin_memory=True)
@@ -137,66 +136,33 @@ if __name__ == '__main__':
             os.path.join(opt.result_path, 'val.log'), ['epoch', 'loss', 'prec1', 'prec5'])
 
     best_prec1 = 0
-    if opt.resume_path:
-        print('loading checkpoint {}'.format(opt.resume_path))
-        checkpoint = torch.load(opt.resume_path)
-        assert opt.arch == checkpoint['arch']
-        best_prec1 = checkpoint['best_prec1']
-        opt.begin_epoch = checkpoint['epoch']
-        model.load_state_dict(checkpoint['state_dict'])
-
-
     print('run')
     for i in range(opt.begin_epoch, opt.n_epochs + 1):
 
         if not opt.no_train:
             adjust_learning_rate(optimizer, i, opt)
-            train_epoch(i, train_loader, model, criterion, optimizer, opt,
-                        train_logger, train_batch_logger)
+            train_kd (i, train_loader, teacher, student, optimizer, opt, train_logger, train_batch_logger)
+
             state = {
                 'epoch': i,
                 'arch': opt.arch,
-                'state_dict': model.state_dict(),
+                'state_dict': teacher.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'best_prec1': best_prec1
                 }
             save_checkpoint(state, False, opt)
             
         if not opt.no_val:
-            validation_loss, prec1 = val_epoch(i, val_loader, model, criterion, opt,
+            validation_loss, prec1 = val_epoch(i, val_loader, student, criterion, opt,
                                         val_logger)
             is_best = prec1 > best_prec1
             best_prec1 = max(prec1, best_prec1)
             state = {
                 'epoch': i,
                 'arch': opt.arch,
-                'state_dict': model.state_dict(),
+                'state_dict': teacher.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'best_prec1': best_prec1
                 }
             save_checkpoint(state, is_best, opt)
-
-
-    if opt.test:
-        spatial_transform = Compose([
-            Scale(int(opt.sample_size / opt.scale_in_test)),
-            CornerCrop(opt.sample_size, opt.crop_position_in_test),
-            ToTensor(opt.norm_value), norm_method
-        ])
-        # temporal_transform = LoopPadding(opt.sample_duration, opt.downsample)
-        temporal_transform = TemporalRandomCrop(opt.sample_duration, opt.downsample)
-        target_transform = VideoID()
-
-        test_data = get_test_set(opt, spatial_transform, temporal_transform,
-                                 target_transform)
-        test_loader = torch.utils.data.DataLoader(
-            test_data,
-            batch_size=16,
-            shuffle=False,
-            num_workers=opt.n_threads,
-            pin_memory=True)
-        test.test(test_loader, model, opt, test_data.class_names)
-
-
-
 
